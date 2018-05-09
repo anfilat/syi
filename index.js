@@ -114,12 +114,15 @@ function parseYouTrackResponse(response) {
 		if (name === 'summary') {
 			result.title = cutLong(value);
 		} else if (name === 'description') {
-			result.text = cutLong(value
+			const text = value
+				// удаляем неиспользуемый плейсхолдер перед текстом
+				.replace(/(\|\*Ветка в GIT\*\|.*|\|\*Функциональные требования\*\|.*)/g, '')
 				// удаляем [](image.png)
 				.replace(/!\[]\(.*?\)/g, '')
-				// заменяем переводы строк на пробелы
-				.replace(/\n+/, ' ')
-			);
+				// убираем пустые строки
+				.replace(/\n+/g, '\n')
+				.trim();
+			result.text = cutLong(text, 500);
 		} else if (name === 'reporterFullName') {
 			result.authorName = value;
 		} else if (name === 'Состояние') {
@@ -129,9 +132,9 @@ function parseYouTrackResponse(response) {
 	return result;
 }
 
-function cutLong(str) {
-	if (str.length > 200) {
-		return str.substr(0, 200) + '...';
+function cutLong(str, maxLength = 200) {
+	if (str.length > maxLength) {
+		return str.substr(0, maxLength) + '...';
 	}
 	return str;
 }
