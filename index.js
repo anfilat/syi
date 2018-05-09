@@ -50,7 +50,7 @@ function messageAttachmentFromLink(linkUrl) {
 				return {
 					url: linkUrl,
 					fallback: data.title,
-					title: `[${id}] ${data.title}`,
+					title: `[<${issueUrl(id)}|${id}>] ${data.title}`,
 					text: data.text,
 					fields: [
 						{
@@ -76,6 +76,10 @@ function checkLink(linkUrl) {
 
 function parseId(linkUrl) {
 	return last(url.parse(linkUrl).pathname.split('/'));
+}
+
+function issueUrl(id) {
+	return `https://${YTSpace}.myjetbrains.com/youtrack/issue/${id}`;
 }
 
 function getYouTrackIssue(id) {
