@@ -3,9 +3,7 @@ const slackEventsAPI = require('@slack/events-api');
 const { WebClient } = require('@slack/client');
 const request = require('request');
 const last = require('lodash.last');
-const keyBy = require('lodash.keyby');
-const omit = require('lodash.omit');
-const mapValues = require('lodash.mapvalues');
+const fromPairs = require('lodash.frompairs');
 const { YTSpace, YTToken, SLACK_VERIFICATION_TOKEN, SLACK_CLIENT_TOKEN } = require("./config.js").settings;
 const port = process.env.PORT || 5000;
 
@@ -18,11 +16,13 @@ slackEvents.on('link_shared', (event) => {
 	if (links.length) {
 		Promise.all(links.map(link => messageAttachmentFromLink(link.url)))
 			.then(attachments => {
-				let unfurls = attachments.filter(attachment => !!attachment);
+				const unfurls = attachments.filter(attachment => !!attachment);
 				if (unfurls.length) {
-					unfurls = keyBy(unfurls, 'url');
-					unfurls = mapValues(unfurls, attachment => omit(attachment, 'url'));
-					slack.chat.unfurl({channel: event.channel, ts: event.message_ts, unfurls})
+					slack.chat.unfurl({
+						channel: event.channel,
+						ts: event.message_ts,
+						unfurls: fromPairs(unfurls)
+					});
 				}
 			})
 			.catch(console.error);
@@ -47,24 +47,30 @@ function messageAttachmentFromLink(linkUrl) {
 	return getYouTrackIssue(id)
 		.then(data => {
 			if (data) {
-				return {
-					url: linkUrl,
-					fallback: data.title,
-					title: `[<${issueUrl(id)}|${id}>] ${data.title}`,
-					text: data.text,
-					fields: [
-						{
-							title: 'Создал',
-							value: data.authorName,
-							short: true
-						},
-						{
-							title: 'Состояние',
-							value: data.status,
-							short: true
-						}
-					]
-				};
+				const issueUrl = getIssueUrl(id);
+				const title = cutLong(data.title);
+				const text = cutLong(cleanText(data.text), 500);
+
+				return [
+					linkUrl,
+					{
+						fallback: title,
+						title: `[<${issueUrl}|${id}>] ${title}`,
+						text,
+						fields: [
+							{
+								title: 'Создал',
+								value: data.authorName,
+								short: true
+							},
+							{
+								title: 'Состояние',
+								value: data.status,
+								short: true
+							}
+						]
+					}
+				];
 			}
 		});
 }
@@ -78,8 +84,26 @@ function parseId(linkUrl) {
 	return last(url.parse(linkUrl).pathname.split('/'));
 }
 
-function issueUrl(id) {
+function getIssueUrl(id) {
 	return `https://${YTSpace}.myjetbrains.com/youtrack/issue/${id}`;
+}
+
+function cleanText(text) {
+	return text
+		// удаляем неиспользуемый плейсхолдер перед текстом
+		.replace(/(\|\*Ветка в GIT\*\|.*|\|\*Функциональные требования\*\|.*)/g, '')
+		// удаляем [](image.png)
+		.replace(/!\[]\(.*?\)/g, '')
+		// убираем пустые строки
+		.replace(/\n+/g, '\n')
+		.trim();
+}
+
+function cutLong(str, maxLength = 200) {
+	if (str.length > maxLength) {
+		return str.substr(0, maxLength) + '...';
+	}
+	return str;
 }
 
 function getYouTrackIssue(id) {
@@ -102,7 +126,7 @@ function getYouTrackRequestOptions(id) {
 	return {
 		url: `https://${YTSpace}.myjetbrains.com/youtrack/rest/issue/${id}`,
 		auth: {
-			'bearer': YTToken
+			bearer: YTToken
 		},
 		headers: {
 			Accept: 'application/json'
@@ -116,17 +140,9 @@ function parseYouTrackResponse(response) {
 
 	data['field'].forEach(({name, value}) => {
 		if (name === 'summary') {
-			result.title = cutLong(value);
+			result.title = value;
 		} else if (name === 'description') {
-			const text = value
-				// удаляем неиспользуемый плейсхолдер перед текстом
-				.replace(/(\|\*Ветка в GIT\*\|.*|\|\*Функциональные требования\*\|.*)/g, '')
-				// удаляем [](image.png)
-				.replace(/!\[]\(.*?\)/g, '')
-				// убираем пустые строки
-				.replace(/\n+/g, '\n')
-				.trim();
-			result.text = cutLong(text, 500);
+			result.text = value;
 		} else if (name === 'reporterFullName') {
 			result.authorName = value;
 		} else if (name === 'Состояние') {
@@ -134,11 +150,4 @@ function parseYouTrackResponse(response) {
 		}
 	});
 	return result;
-}
-
-function cutLong(str, maxLength = 200) {
-	if (str.length > maxLength) {
-		return str.substr(0, maxLength) + '...';
-	}
-	return str;
 }
