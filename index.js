@@ -1,83 +1,87 @@
 const url = require('url');
-const slackEventsAPI = require('@slack/events-api');
-const { WebClient } = require('@slack/client');
+const { WebClient, RTMClient } = require('@slack/client');
+const HttpsProxyAgent = require('https-proxy-agent');
 const request = require('request');
 const last = require('lodash.last');
-const fromPairs = require('lodash.frompairs');
-const { YTSpace, YTToken, SLACK_VERIFICATION_TOKEN, SLACK_CLIENT_TOKEN } = require("./config.js").settings;
+const uniq = require('lodash.uniq');
+const { YTSpace, YTToken, logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
 const port = process.env.PORT || 5000;
 
-const slackEvents = slackEventsAPI.createSlackEventAdapter(SLACK_VERIFICATION_TOKEN);
-const slack = new WebClient(SLACK_CLIENT_TOKEN);
+if (process.env.HEROKU) {
+	const http = require('http');
 
-slackEvents.on('link_shared', (event) => {
-	const links = event.links.filter(link => checkLink(link.url));
+	const server = http.createServer((request, response) => {
+		response.end('ok');
+	});
+	server.listen(port);
+}
 
+// Web API connector
+const slackWeb = new WebClient(SLACK_BOT_TOKEN);
+
+// RTM API connector
+const rtmOptions = {
+	logLevel: logLevel || 'info'
+};
+
+if (proxyUrl) {
+	rtmOptions.agent = new HttpsProxyAgent(proxyUrl);
+}
+
+const rtm = new RTMClient(SLACK_BOT_TOKEN, rtmOptions);
+rtm.start();
+
+rtm.on('message', (event) => {
+	if (event.subtype) {
+		return;
+	}
+
+	let links = parseLinks(event.text);
 	if (links.length) {
-		Promise.all(links.map(link => messageAttachmentFromLink(link.url)))
-			.then(attachments => {
-				const unfurls = attachments.filter(attachment => !!attachment);
-				if (unfurls.length) {
-					slack.chat.unfurl({
-						channel: event.channel,
-						ts: event.message_ts,
-						unfurls: fromPairs(unfurls)
-					});
-				}
+		Promise.all(links.map(messageForLink))
+			.then(messages => {
+				messages
+					.filter(message => !!message)
+					.forEach(message => sendMessage(message, event));
 			})
 			.catch(console.error);
 	}
 });
 
-const slackEventsErrorCodes = slackEventsAPI.errorCodes;
-slackEvents.on('error', (error) => {
-	if (error.code === slackEventsErrorCodes.TOKEN_VERIFICATION_FAILURE) {
-		console.warn(`An unverified request was sent to the Slack events request URL: ${error.body}`);
-	} else {
-		console.error(error);
+const linkRE = new RegExp(`<https://${YTSpace}.myjetbrains.com/youtrack/issue/.*?>`, 'g');
+
+function parseLinks(text) {
+	let links = text.match(linkRE);
+	return uniq(links.map(link => link.substr(1, link.length - 2)));
+}
+
+function sendMessage({url, text}, event) {
+	console.log('send info for', url);
+	const body = {
+		text,
+		channel: event.channel
+	};
+	if (event.thread_ts) {
+		body.thread_ts = event.thread_ts;
 	}
-});
+	slackWeb.chat.postMessage(body);
+}
 
-slackEvents.start(port).then(() => {
-	console.log(`server listening on port ${port}`);
-});
-
-function messageAttachmentFromLink(linkUrl) {
+function messageForLink(linkUrl) {
 	const id = parseId(linkUrl);
 	return getYouTrackIssue(id)
 		.then(data => {
 			if (data) {
 				const issueUrl = getIssueUrl(id);
-				const title = cutLong(data.title);
-				const text = cutLong(cleanText(data.text), 500);
+				const title = encodeHTMLEntities(cutLong(data.title, 200));
+				const text = encodeHTMLEntities(cutLong(cleanText(data.text), 300));
 
-				return [
-					linkUrl,
-					{
-						fallback: title,
-						title: `[<${issueUrl}|${id}>] ${title}`,
-						text,
-						fields: [
-							{
-								title: 'Создал',
-								value: data.authorName,
-								short: true
-							},
-							{
-								title: 'Состояние',
-								value: data.status,
-								short: true
-							}
-						]
-					}
-				];
+				return {
+					url: issueUrl,
+					text: `*[<${issueUrl}|${id}>] ${title}*\n*Создал* ${data.authorName}\n*Состояние* ${data.status}\n${text}`
+				};
 			}
 		});
-}
-
-function checkLink(linkUrl) {
-	const parsedUrl = url.parse(linkUrl);
-	return parsedUrl.host.indexOf(YTSpace) === 0 && parsedUrl.pathname.indexOf('/youtrack/issue/') === 0;
 }
 
 function parseId(linkUrl) {
@@ -88,18 +92,29 @@ function getIssueUrl(id) {
 	return `https://${YTSpace}.myjetbrains.com/youtrack/issue/${id}`;
 }
 
+// удаляем неиспользуемый плейсхолдер перед текстом
+const placeholderRE = new RegExp(/(\|\*Ветка в GIT\*\|.*|\|\*Функциональные требования\*\|.*)/g);
+// удаляем [](image.png)
+const imageRE = new RegExp(/!\[]\(.*?\)/g);
+// убираем пустые строки
+const doubleEmptyLinesRE = new RegExp(/\n+/g);
+
 function cleanText(text) {
 	return text
-		// удаляем неиспользуемый плейсхолдер перед текстом
-		.replace(/(\|\*Ветка в GIT\*\|.*|\|\*Функциональные требования\*\|.*)/g, '')
-		// удаляем [](image.png)
-		.replace(/!\[]\(.*?\)/g, '')
-		// убираем пустые строки
-		.replace(/\n+/g, '\n')
+		.replace(placeholderRE, '')
+		.replace(imageRE, '')
+		.replace(doubleEmptyLinesRE, '\n')
 		.trim();
 }
 
-function cutLong(str, maxLength = 200) {
+function encodeHTMLEntities(text) {
+	return text
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/&/g, '&amp;')
+}
+
+function cutLong(str, maxLength) {
 	if (str.length > maxLength) {
 		return str.substr(0, maxLength) + '...';
 	}

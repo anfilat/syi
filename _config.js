@@ -1,6 +1,9 @@
 exports.settings = {
 	YTSpace: '',
 	YTToken: '',
-	SLACK_VERIFICATION_TOKEN: '',
-	SLACK_CLIENT_TOKEN: ''
+	// default - 'info', for more info - 'debug'
+	logLevel: '',
+	// https url to VPN
+	proxyUrl: '',
+	SLACK_BOT_TOKEN: '',
 };
