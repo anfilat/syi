@@ -57,7 +57,7 @@ function parseLinks(text) {
 }
 
 function sendMessage({url, text}, event) {
-	console.log('send info for', url);
+	console.error('send info for', url);
 	const body = {
 		text,
 		channel: event.channel
