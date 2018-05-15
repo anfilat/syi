@@ -3,6 +3,7 @@ const { WebClient, RTMClient } = require('@slack/client');
 const HttpsProxyAgent = require('https-proxy-agent');
 const request = require('request');
 const last = require('lodash.last');
+const map = require('lodash.map');
 const uniq = require('lodash.uniq');
 const { YTSpace, YTToken, logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
 const port = process.env.PORT || 5000;
@@ -52,7 +53,7 @@ const linkRE = new RegExp(`<https://${YTSpace}.myjetbrains.com/youtrack/issue/.*
 
 function parseLinks(text) {
 	let links = text.match(linkRE);
-	return uniq(links.map(link => link.substr(1, link.length - 2)));
+	return uniq(map(links, link => link.substr(1, link.length - 2)));
 }
 
 function sendMessage({url, text}, event) {
