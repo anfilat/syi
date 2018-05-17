@@ -1,21 +1,12 @@
 const url = require('url');
+const querystring = require('querystring');
 const { WebClient, RTMClient } = require('@slack/client');
 const HttpsProxyAgent = require('https-proxy-agent');
-const request = require('request');
 const last = require('lodash.last');
 const map = require('lodash.map');
 const uniq = require('lodash.uniq');
-const { YTSpace, YTToken, logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
-const port = process.env.PORT || 5000;
-
-if (process.env.HEROKU) {
-	const http = require('http');
-
-	const server = http.createServer((request, response) => {
-		response.end('ok');
-	});
-	server.listen(port);
-}
+const getYouTrackIssue = require('./youtrack');
+const { YTSpace, logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
 
 // Web API connector
 const slackWeb = new WebClient(SLACK_BOT_TOKEN);
@@ -69,24 +60,45 @@ function sendMessage({url, text}, event) {
 }
 
 function messageForLink(linkUrl) {
-	const id = parseId(linkUrl);
+	const {id, commentId} = parseIds(linkUrl);
 	return getYouTrackIssue(id)
 		.then(data => {
 			if (data) {
 				const issueUrl = getIssueUrl(id);
 				const title = encodeHTMLEntities(cutLong(data.title, 200));
-				const text = encodeHTMLEntities(cutLong(cleanText(data.text), 300));
+				const body = encodeHTMLEntities(cutLong(cleanText(data.text), 300));
+
+				let text = `*[<${issueUrl}|${id}>] ${title}*\n`;
+				text += `*Создал* ${data.authorName}\n`;
+				text += `*Состояние* ${data.status}\n`;
+				text += body;
+
+				if (commentId) {
+					const comment = data.comments.find(({id}) => id === commentId);
+					if (comment) {
+						const commentBody = encodeHTMLEntities(cutLong(cleanText(comment.text), 300));
+
+						text += `*Комментарий* ${comment.authorName}\n`;
+						text += commentBody;
+					}
+				}
 
 				return {
 					url: issueUrl,
-					text: `*[<${issueUrl}|${id}>] ${title}*\n*Создал* ${data.authorName}\n*Состояние* ${data.status}\n${text}`
+					text
 				};
 			}
 		});
 }
 
-function parseId(linkUrl) {
-	return last(url.parse(linkUrl).pathname.split('/'));
+function parseIds(linkUrl) {
+	const parsed = url.parse(linkUrl);
+	const id = last(parsed.pathname.split('/'));
+	let commentId = null;
+	if (parsed.hash) {
+		commentId = querystring.parse(parsed.hash)['#comment'];
+	}
+	return {id, commentId};
 }
 
 function getIssueUrl(id) {
@@ -120,50 +132,4 @@ function cutLong(str, maxLength) {
 		return str.substr(0, maxLength) + '...';
 	}
 	return str;
-}
-
-function getYouTrackIssue(id) {
-	return new Promise(function(resolve, reject) {
-		request(getYouTrackRequestOptions(id), (error, response, body) => {
-			if (error) {
-				reject(error);
-			} else {
-				if (response.statusCode === 200) {
-					resolve(parseYouTrackResponse(body));
-				} else {
-					resolve();
-				}
-			}
-		});
-	});
-}
-
-function getYouTrackRequestOptions(id) {
-	return {
-		url: `https://${YTSpace}.myjetbrains.com/youtrack/rest/issue/${id}`,
-		auth: {
-			bearer: YTToken
-		},
-		headers: {
-			Accept: 'application/json'
-		}
-	};
-}
-
-function parseYouTrackResponse(response) {
-	const data = JSON.parse(response);
-	const result = {};
-
-	data['field'].forEach(({name, value}) => {
-		if (name === 'summary') {
-			result.title = value;
-		} else if (name === 'description') {
-			result.text = value;
-		} else if (name === 'reporterFullName') {
-			result.authorName = value;
-		} else if (name === 'Состояние') {
-			result.status = value[0];
-		}
-	});
-	return result;
 }
