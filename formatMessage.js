@@ -1,3 +1,5 @@
+const { getIssueUrl } = require('./youtrack');
+
 module.exports = formatMessage;
 
 function formatMessage(id, commentId, data) {
@@ -24,10 +26,6 @@ function formatMessage(id, commentId, data) {
 		url: issueUrl,
 		text
 	};
-}
-
-function getIssueUrl(id) {
-	return `https://${YTSpace}.myjetbrains.com/youtrack/issue/${id}`;
 }
 
 // удаляем неиспользуемый плейсхолдер перед текстом

@@ -2,7 +2,10 @@ const request = require('request');
 const map = require('lodash.map');
 const { YTSpace, YTToken } = require("./config.js").settings;
 
-module.exports = getYouTrackIssue;
+module.exports.getYouTrackIssue = getYouTrackIssue;
+module.exports.getIssueUrl = getIssueUrl;
+
+module.exports.linkRE = new RegExp(`<https://${YTSpace}.myjetbrains.com/youtrack/issue/.*?>`, 'g');
 
 function getYouTrackIssue(id) {
 	return new Promise((resolve, reject) => {
@@ -18,6 +21,10 @@ function getYouTrackIssue(id) {
 			}
 		});
 	});
+}
+
+function getIssueUrl(id) {
+	return `https://${YTSpace}.myjetbrains.com/youtrack/issue/${id}`;
 }
 
 function getYouTrackRequestOptions(id) {

@@ -5,9 +5,9 @@ const HttpsProxyAgent = require('https-proxy-agent');
 const last = require('lodash.last');
 const map = require('lodash.map');
 const uniq = require('lodash.uniq');
-const getYouTrackIssue = require('./youtrack');
+const { getYouTrackIssue, linkRE } = require('./youtrack');
 const formatMessage = require('./formatMessage');
-const { YTSpace, logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
+const { logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
 
 // Web API connector
 const slackWeb = new WebClient(SLACK_BOT_TOKEN);
@@ -41,8 +41,6 @@ rtm.on('message', (event) => {
 	}
 });
 
-const linkRE = new RegExp(`<https://${YTSpace}.myjetbrains.com/youtrack/issue/.*?>`, 'g');
-
 function parseLinks(text) {
 	let links = text.match(linkRE);
 	return uniq(map(links, link => link.substr(1, link.length - 2)));
@@ -69,7 +67,7 @@ function parseIds(linkUrl) {
 }
 
 function sendMessage({url, text}, event) {
-	console.error('send info for', url);
+	console.log('send info for', url);
 	const body = {
 		text,
 		channel: event.channel
