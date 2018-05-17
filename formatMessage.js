@@ -17,7 +17,7 @@ function formatMessage(id, commentId, data) {
 		if (comment) {
 			const commentBody = encodeHTMLEntities(cutLong(cleanText(comment.text), 300));
 
-			text += `*Комментарий* ${comment.authorName}\n`;
+			text += `\n*Комментарий* ${comment.authorName}\n`;
 			text += commentBody;
 		}
 	}
