@@ -6,6 +6,7 @@ const last = require('lodash.last');
 const map = require('lodash.map');
 const uniq = require('lodash.uniq');
 const getYouTrackIssue = require('./youtrack');
+const formatMessage = require('./formatMessage');
 const { YTSpace, logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
 
 // Web API connector
@@ -30,7 +31,7 @@ rtm.on('message', (event) => {
 
 	let links = parseLinks(event.text);
 	if (links.length) {
-		Promise.all(links.map(messageForLink))
+		Promise.all(links.map(getMessageForLink))
 			.then(messages => {
 				messages
 					.filter(message => !!message)
@@ -47,46 +48,12 @@ function parseLinks(text) {
 	return uniq(map(links, link => link.substr(1, link.length - 2)));
 }
 
-function sendMessage({url, text}, event) {
-	console.error('send info for', url);
-	const body = {
-		text,
-		channel: event.channel
-	};
-	if (event.thread_ts) {
-		body.thread_ts = event.thread_ts;
-	}
-	slackWeb.chat.postMessage(body);
-}
-
-function messageForLink(linkUrl) {
+function getMessageForLink(linkUrl) {
 	const {id, commentId} = parseIds(linkUrl);
 	return getYouTrackIssue(id)
 		.then(data => {
 			if (data) {
-				const issueUrl = getIssueUrl(id);
-				const title = encodeHTMLEntities(cutLong(data.title, 200));
-				const body = encodeHTMLEntities(cutLong(cleanText(data.text), 300));
-
-				let text = `*[<${issueUrl}|${id}>] ${title}*\n`;
-				text += `*Создал* ${data.authorName}\n`;
-				text += `*Состояние* ${data.status}\n`;
-				text += body;
-
-				if (commentId) {
-					const comment = data.comments.find(({id}) => id === commentId);
-					if (comment) {
-						const commentBody = encodeHTMLEntities(cutLong(cleanText(comment.text), 300));
-
-						text += `*Комментарий* ${comment.authorName}\n`;
-						text += commentBody;
-					}
-				}
-
-				return {
-					url: issueUrl,
-					text
-				};
+				return formatMessage(id, commentId, data);
 			}
 		});
 }
@@ -101,35 +68,14 @@ function parseIds(linkUrl) {
 	return {id, commentId};
 }
 
-function getIssueUrl(id) {
-	return `https://${YTSpace}.myjetbrains.com/youtrack/issue/${id}`;
-}
-
-// удаляем неиспользуемый плейсхолдер перед текстом
-const placeholderRE = new RegExp(/(\|\*Ветка в GIT\*\|.*|\|\*Функциональные требования\*\|.*)/g);
-// удаляем [](image.png)
-const imageRE = new RegExp(/!\[]\(.*?\)/g);
-// убираем пустые строки
-const doubleEmptyLinesRE = new RegExp(/\n+/g);
-
-function cleanText(text) {
-	return text
-		.replace(placeholderRE, '')
-		.replace(imageRE, '')
-		.replace(doubleEmptyLinesRE, '\n')
-		.trim();
-}
-
-function encodeHTMLEntities(text) {
-	return text
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/&/g, '&amp;')
-}
-
-function cutLong(str, maxLength) {
-	if (str.length > maxLength) {
-		return str.substr(0, maxLength) + '...';
+function sendMessage({url, text}, event) {
+	console.error('send info for', url);
+	const body = {
+		text,
+		channel: event.channel
+	};
+	if (event.thread_ts) {
+		body.thread_ts = event.thread_ts;
 	}
-	return str;
+	slackWeb.chat.postMessage(body);
 }
