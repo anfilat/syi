@@ -1,5 +1,5 @@
 const request = require('request');
-const map = require('lodash.map');
+const _ = require('lodash');
 const { YTSpace, YTToken } = require("./config.js").settings;
 
 module.exports.getYouTrackIssue = getYouTrackIssue;
@@ -43,7 +43,7 @@ function parseYouTrackResponse(response) {
 	const data = JSON.parse(response);
 	const result = {};
 
-	data['field'].forEach(({name, value}) => {
+	_.forEach(data.field, ({name, value}) => {
 		if (name === 'summary') {
 			result.title = value;
 		} else if (name === 'description') {
@@ -54,6 +54,6 @@ function parseYouTrackResponse(response) {
 			result.status = value[0];
 		}
 	});
-	result.comments = map(data.comment, ({id, authorFullName: authorName, text}) => ({id, authorName, text}));
+	result.comments = _.map(data.comment, ({id, authorFullName: authorName, text}) => ({id, authorName, text}));
 	return result;
 }

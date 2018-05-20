@@ -2,9 +2,7 @@ const url = require('url');
 const querystring = require('querystring');
 const { WebClient, RTMClient } = require('@slack/client');
 const HttpsProxyAgent = require('https-proxy-agent');
-const last = require('lodash.last');
-const map = require('lodash.map');
-const uniq = require('lodash.uniq');
+const _ = require('lodash');
 const { getYouTrackIssue, linkRE } = require('./youtrack');
 const formatMessage = require('./formatMessage');
 const { logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
@@ -43,11 +41,14 @@ rtm.on('message', (event) => {
 
 function parseLinks(text) {
 	let links = text.match(linkRE);
-	return uniq(map(links, link => link.substr(1, link.length - 2)));
+	return _(links)
+		.map(link => link.substr(1, link.length - 2))
+		.uniq()
+		.valueOf();
 }
 
 function getMessageForLink(linkUrl) {
-	const {id, commentId} = parseIds(linkUrl);
+	const {id, commentId} = parseLinkIds(linkUrl);
 	return getYouTrackIssue(id)
 		.then(data => {
 			if (data) {
@@ -56,18 +57,17 @@ function getMessageForLink(linkUrl) {
 		});
 }
 
-function parseIds(linkUrl) {
+function parseLinkIds(linkUrl) {
 	const parsed = url.parse(linkUrl);
-	const id = last(parsed.pathname.split('/'));
-	let commentId = null;
-	if (parsed.hash) {
-		commentId = querystring.parse(parsed.hash)['#comment'];
-	}
+	const id = _.last(parsed.pathname.split('/'));
+	const commentId = parsed.hash
+		? querystring.parse(parsed.hash)['#comment']
+		: null;
+
 	return {id, commentId};
 }
 
 function sendMessage({url, text}, event) {
-	console.log('send info for', url);
 	const body = {
 		text,
 		channel: event.channel
@@ -75,5 +75,7 @@ function sendMessage({url, text}, event) {
 	if (event.thread_ts) {
 		body.thread_ts = event.thread_ts;
 	}
+
+	console.log('send info for', url);
 	slackWeb.chat.postMessage(body);
 }
