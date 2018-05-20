@@ -6,7 +6,7 @@ const HttpsProxyAgent = require('https-proxy-agent');
 const _ = require('lodash');
 const { getYouTrackIssue, linkRE } = require('./youtrack');
 const formatMessage = require('./formatMessage');
-const { proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
+const { proxyUrl, SLACK_BOT_TOKEN } = require("./config.js");
 
 const logger = log.getLogger("bot");
 logger.setLevel(logLevel);

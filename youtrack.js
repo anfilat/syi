@@ -1,6 +1,6 @@
 const request = require('request');
 const _ = require('lodash');
-const { YTSpace, YTToken } = require("./config.js").settings;
+const { YTSpace, YTToken } = require("./config.js");
 
 module.exports.getYouTrackIssue = getYouTrackIssue;
 module.exports.getIssueUrl = getIssueUrl;

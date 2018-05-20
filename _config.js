@@ -1,4 +1,4 @@
-exports.settings = {
+module.exports = {
 	YTSpace: '',
 	YTToken: '',
 	// default - 'info', for more info - 'debug'

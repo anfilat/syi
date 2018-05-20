@@ -1,6 +1,6 @@
 const log = require("loglevel");
 const logPrefixer = require('loglevel-plugin-prefix');
-const { logLevel } = require("./config.js").settings;
+const { logLevel } = require("./config.js");
 
 logPrefixer.reg(log);
 logPrefixer.apply(log, {
