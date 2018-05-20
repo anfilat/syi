@@ -1,18 +1,22 @@
 const url = require('url');
 const querystring = require('querystring');
+const { log, logLevel } = require("./logger");
 const { WebClient, RTMClient } = require('@slack/client');
 const HttpsProxyAgent = require('https-proxy-agent');
 const _ = require('lodash');
 const { getYouTrackIssue, linkRE } = require('./youtrack');
 const formatMessage = require('./formatMessage');
-const { logLevel, proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
+const { proxyUrl, SLACK_BOT_TOKEN } = require("./config.js").settings;
+
+const logger = log.getLogger("bot");
+logger.setLevel(logLevel);
 
 // Web API connector
 const slackWeb = new WebClient(SLACK_BOT_TOKEN);
 
 // RTM API connector
 const rtmOptions = {
-	logLevel: logLevel || 'info'
+	logLevel
 };
 
 if (proxyUrl) {
@@ -35,7 +39,7 @@ rtm.on('message', (event) => {
 					.filter(message => !!message)
 					.forEach(message => sendMessage(message, event));
 			})
-			.catch(console.error);
+			.catch(logger.error);
 	}
 });
 
@@ -76,6 +80,6 @@ function sendMessage({url, text}, event) {
 		body.thread_ts = event.thread_ts;
 	}
 
-	console.log('send info for', url);
+	logger.info('send info for', url);
 	slackWeb.chat.postMessage(body);
 }
