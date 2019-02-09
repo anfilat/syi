@@ -12,11 +12,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@slack/client": "^4.2.0",
+    "@slack/client": "^4.8.0",
     "https-proxy-agent": "^2.2.1",
-    "lodash": "^4.17.10",
+    "lodash": "^4.17.11",
     "loglevel": "^1.6.1",
-    "loglevel-plugin-prefix": "^0.8.3",
-    "request": "^2.85.0"
+    "loglevel-plugin-prefix": "^0.8.4",
+    "request": "^2.88.0"
   }
 }
